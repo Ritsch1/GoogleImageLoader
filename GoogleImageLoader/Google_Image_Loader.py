@@ -1,23 +1,26 @@
-import os, time, threading, multiprocessing as mp
+import os
+import time
+import threading
+import multiprocessing as mp
 from queue import Queue
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import requests as r
+import urllib.request
 
 class Loader:
     """
     The central class to perform the loading of the google - images.
     """
 
-    def __init__(self, search_keys:[str], num_images:int=10):
+    def __init__(self, search_keys:[str], num_images:int=20):
         """Initialize instance of the Google_Image_Loader class
 
         Args:
             search_keys : List of search keys for which images shall be downloaded.
                           If the list is empty, a ValueError is raised.
             num_images: The maximum number of images to download for every search-key.
-                        By default set to 10.
+                        By default set to 20.
         """
         if type(search_keys) != list and type(search_keys) != tuple:
             raise ValueError(f"provided search_keys - value {search_keys} is not an iterable.")
@@ -106,7 +109,7 @@ class Loader:
             try:
                 imgs = html_doc.find_all(class_="rg_i Q4LuWd", limit=self.num_images)
                 for tag in imgs:
-                    q.put(search_key, tag["src"])
+                    q.put( (search_key, tag["src"]) )
 
             except:
                 print(f"Error while parsing the page source-code of search-key {search_key}.")
@@ -124,7 +127,7 @@ class Loader:
         # Create as many threads as there are cpu-cores
         for i in range(mp.cpu_count()):
             # Initialize processes that will work in parallel on the urls in the url_queue
-            threads.append(mp.Process(target=worker, args=(url_queue,), daemon=True))
+            threads.append(threading.Thread(target=self.worker, args=(url_queue,), daemon=True))
             # Start process
             threads[i].start()
 
@@ -139,20 +142,11 @@ class Loader:
         params:
             url_queue: Queue that contains all image urls in the form (search_key, image_url).
         """
-        # Basically
         global DIRECTORY_PREFIX
-        # Used to increment image file names
-        image_counter = 1
-        valid_image_extensions = ["png", "jpg", "jpeg"]
         while True:
             key, url = url_queue.get()
-            extension = url[:20].split("/")[-1]
-            # Check if its a valid extension
-            if extension not in valid_image_extensions:
-                continue
-            response = r.get(url)
+            response = urllib.request.urlopen(url)
             url_queue.task_done()
-            if response.status_code == 200:
-                # add last 5 url characters for unique filename property
-                with open(os.path.join(self.DIRECTORY_PREFIX, key, url[:-5]+".jpg"), 'wb') as f:
-                    f.write(response.content)
+            # add hash of last 5 url characters for unique filename property
+            with open(os.path.join(self.DIRECTORY_PREFIX, key, str(hash(url[-5:])[-10:])+".jpg"), 'wb') as f:
+                f.write(response.file.read())
