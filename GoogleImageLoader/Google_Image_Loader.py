@@ -1,9 +1,9 @@
-import os, time, threading
+import os, time, threading, multiprocessing as mp
 from queue import Queue
-import datetime
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
+import requests as r
 
 class Loader:
     """
@@ -39,15 +39,16 @@ class Loader:
             self.page_sources = {}
             # Dictionary for storing the urls of images found in the page source-codes
             self.image_urls = {}
+            # Directory path where directories of the search-keys and within them the images will be saved
+            self.DIRECTORY_PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
 
     def create_image_dirs(self):
         """
         Creates the image directories for the search-keys.
         """
-        PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
-        os.mkdir(path=PREFIX)
+        os.mkdir(path=self.DIRECTORY_PREFIX)
         for search_key in self.search_keys:
-            os.mkdir(path=os.path.join(PREFIX, search_key))
+            os.mkdir(path=os.path.join(self.DIRECTORY_PREFIX, search_key))
 
     def reformat_search_keys(self):
         """
@@ -59,15 +60,15 @@ class Loader:
     def scroll_through_google_images(self):
         """
         This function executes scrolling through the google image search results. This
-        is neccessary as google only loads new images by scrolling down. Additionally,
+        is necessary as google only loads new images by scrolling down. Additionally,
         the "see more" button needs to be clicked.
         """
         for search_key in self.search_keys:
             driver = webdriver.Chrome(ChromeDriverManager().install())
             # Construct the target url to access
-            self.url = self.GOOGLE_PREFIX + search_key + self.GOOGLE_SUFFIX
+            url = self.GOOGLE_PREFIX + search_key + self.GOOGLE_SUFFIX
             # Invoke get request
-            driver.get(self.url)
+            driver.get(url)
 
             # Accessing the page and scroll down / click buttons
             try:
@@ -85,13 +86,19 @@ class Loader:
             self.page_sources[search_key] = driver.page_source
             driver.close()
 
-    def extract_picture_urls(self):
+    def extract_picture_urls(self) -> Queue:
         """
-        Extract the url of every image for page source-codes.
+        Extract the url of every image for each page source-codes.
+
+        returns:
+            A queue that contains all image urls and the corresponding search_key in the
+            form (search_key, image_url)
         """
+        # Queue for storing all picture urls
+        q = Queue()
         for search_key in self.search_keys:
             # queue to insert the image urls for a specific search - key into
-            q = Queue()
+
             # Get the page source-code for a specific search - key and parse it
             html_doc = BeautifulSoup(self.page_sources[search_key], "html.parser")
             # Only extract maximally num_images many picture - urls
@@ -99,11 +106,53 @@ class Loader:
             try:
                 imgs = html_doc.find_all(class_="rg_i Q4LuWd", limit=self.num_images)
                 for tag in imgs:
-                    q.put(tag["src"])
+                    q.put(search_key, tag["src"])
 
             except:
                 print(f"Error while parsing the page source-code of search-key {search_key}.")
 
-            # Set the queue with all image_urls for a specific search-key as a value
-            # in the dictionary to the search-key key.
-            self.image_urls[search_key] = q
+        return q
+
+    def download_images(self, url_queue:Queue):
+        """
+        Download all images given their urls and load them into the corresponding directory.
+
+        params:
+            url_queue: Queue that contains all image urls in the form (search_key, image_url).
+        """
+        threads = []
+        # Create as many threads as there are cpu-cores
+        for i in range(mp.cpu_count()):
+            # Initialize processes that will work in parallel on the urls in the url_queue
+            threads.append(mp.Process(target=worker, args=(url_queue,), daemon=True))
+            # Start process
+            threads[i].start()
+
+        # This thread/function will only continue when all items in the queue were processed by the threads
+        url_queue.join()
+
+    def worker(self, url_queue:Queue):
+        """
+        Initiates a worker thread to download images from the web and saving them to disk.
+        This way network - delays and I/O - blocks can be mitigated and the code can be sped up.
+
+        params:
+            url_queue: Queue that contains all image urls in the form (search_key, image_url).
+        """
+        # Basically
+        global DIRECTORY_PREFIX
+        # Used to increment image file names
+        image_counter = 1
+        valid_image_extensions = ["png", "jpg", "jpeg"]
+        while True:
+            key, url = url_queue.get()
+            extension = url[:20].split("/")[-1]
+            # Check if its a valid extension
+            if extension not in valid_image_extensions:
+                continue
+            response = r.get(url)
+            url_queue.task_done()
+            if response.status_code == 200:
+                # add last 5 url characters for unique filename property
+                with open(os.path.join(self.DIRECTORY_PREFIX, key, url[:-5]+".jpg"), 'wb') as f:
+                    f.write(response.content)
