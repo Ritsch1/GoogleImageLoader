@@ -82,6 +82,9 @@ class LoaderTest(unittest.TestCase):
         rmtree(PREFIX)
 
     def test_create_image_dirs_two_search_keys_tuple(self):
+        """
+        Testing the create_image_dirs method of the Loader - class
+        """
         # Arrange
         PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
         search_keys = ("Cats", "Unicorns")
@@ -94,6 +97,9 @@ class LoaderTest(unittest.TestCase):
         rmtree(PREFIX)
 
     def test_reformat_search_keys_one_key_whitespaces(self):
+        """
+        Testing the reformat_search_keys method of the Loader - class
+        """
         # Arrange
         search_key = tuple([" fluffy Dogs "])
         # Act
@@ -103,15 +109,40 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(gil.search_keys, ["fluffy+Dogs"])
 
     def test_page_scroll(self):
+        """
+        Testing the scroll_through_google_images method of the Loader - class
+        """
         # Arrange
-        search_key = ["fluffy Gods", "fluffy Hawks"]
+        search_keys = ["fluffy Gods", "fluffy Hawks"]
         # Act
-        gil = Google_Image_Loader.Loader(search_key)
+        gil = Google_Image_Loader.Loader(search_keys)
         gil.reformat_search_keys()
         gil.scroll_through_google_images()
         # Number of page source codes should be equal to the number of search-keys
         # Assert
-        self.assertEqual(len(gil.page_sources), len(search_key))
+        self.assertEqual(len(gil.page_sources), len(search_keys))
+
+    def test_extract_picture_urls(self):
+        """
+        Testing the extract_picture_url method of the Loader - class
+        """
+        # Arrange
+        search_keys = ["fluffy Gods", "fluffy Hawks"]
+        # Act
+        gil = Google_Image_Loader.Loader(search_keys)
+        gil.reformat_search_keys()
+        gil.scroll_through_google_images()
+        gil.extract_picture_urls()
+
+        # Count number of image urls in both image - url queues.
+        # It should equal twice the maximal number of images to retrieve if this number is not too high.
+        num_image_urls = 0
+        for s in gil.search_keys:
+            while not gil.image_urls[s].empty():
+                gil.image_urls[s].get()
+                num_image_urls += 1
+        # Assert
+        self.assertEqual(len(search_keys) * gil.num_images, num_image_urls,)
 
 if __name__ == '__main__':
     unittest.main()
