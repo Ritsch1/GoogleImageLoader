@@ -3,20 +3,21 @@ from queue import Queue
 import datetime
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
 class Loader:
     """
     The central class to perform the loading of the google - images.
     """
 
-    def __init__(self, search_keys:[str], num_images:int=100):
+    def __init__(self, search_keys:[str], num_images:int=10):
         """Initialize instance of the Google_Image_Loader class
 
         Args:
             search_keys : List of search keys for which images shall be downloaded.
                           If the list is empty, a ValueError is raised.
             num_images: The maximum number of images to download for every search-key.
-                        By default set to 100.
+                        By default set to 10.
         """
         if type(search_keys) != list and type(search_keys) != tuple:
             raise ValueError(f"provided search_keys - value {search_keys} is not an iterable.")
@@ -35,8 +36,9 @@ class Loader:
             self.GOOGLE_PREFIX = "https://www.google.com/search?q="
             self.GOOGLE_SUFFIX = "&source=lnms&tbm=isch&sa=X&ei=0eZEVbj3IJG5uATalICQAQ&ved=0CAcQ_AUoAQ&biw=939&bih=591"
             # Variable to save the current stage of the google image results for different search_keys
-            self.page_sources = []
-            self.url = ""
+            self.page_sources = {}
+            # Dictionary for storing the urls of images found in the page source-codes
+            self.image_urls = {}
 
     def create_image_dirs(self):
         """
@@ -80,10 +82,28 @@ class Loader:
                 driver.quit()
 
             # Get the pages' current source code
-            self.page_sources.append(driver.page_source)
+            self.page_sources[search_key] = driver.page_source
             driver.close()
 
-    def extract_picture_url(self):
+    def extract_picture_urls(self):
         """
-        For all
+        Extract the url of every image for page source-codes.
         """
+        for search_key in self.search_keys:
+            # queue to insert the image urls for a specific search - key into
+            q = Queue()
+            # Get the page source-code for a specific search - key and parse it
+            html_doc = BeautifulSoup(self.page_sources[search_key], "html.parser")
+            # Only extract maximally num_images many picture - urls
+            # rg_i Q4LuWd is the class identifier of the img tags of interest
+            try:
+                imgs = html_doc.find_all(class_="rg_i Q4LuWd", limit=self.num_images)
+                for tag in imgs:
+                    q.put(tag["src"])
+
+            except:
+                print(f"Error while parsing the page source-code of search-key {search_key}.")
+
+            # Set the queue with all image_urls for a specific search-key as a value
+            # in the dictionary to the search-key key.
+            self.image_urls[search_key] = q
