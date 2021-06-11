@@ -10,7 +10,9 @@ args = parser.parse_args()
 PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
 gil = GoogleImageLoader.Loader(args.keys, args.num_images)
 gil.reformat_search_keys()
-gil.create_image_dirs()
+# If directory already exists, skip creating it
+if os.path.isdir(PREFIX):
+    gil.create_image_dirs()
 gil.scroll_through_google_images()
 url_queue = gil.extract_picture_urls()
 gil.download_images(url_queue=url_queue)
