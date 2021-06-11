@@ -102,5 +102,16 @@ class LoaderTest(unittest.TestCase):
         # Assert
         self.assertEqual(gil.search_keys, ["fluffy+Dogs"])
 
+    def test_page_scroll(self):
+        # Arrange
+        search_key = ["fluffy Gods", "fluffy Hawks"]
+        # Act
+        gil = Google_Image_Loader.Loader(search_key)
+        gil.reformat_search_keys()
+        gil.scroll_through_google_images()
+        # Number of page source codes should be equal to the number of search-keys
+        # Assert
+        self.assertEqual(len(gil.page_sources), len(search_key))
+
 if __name__ == '__main__':
     unittest.main()
