@@ -1,5 +1,6 @@
 import unittest
-from os import listdir, rmdir
+import os
+from shutil import rmtree
 from GoogleImageLoader import Google_Image_Loader
 
 class LoaderTest(unittest.TestCase):
@@ -48,43 +49,36 @@ class LoaderTest(unittest.TestCase):
         search_keys = [""]
         self.assertRaises(ValueError, Google_Image_Loader.Loader, search_keys)
 
-    def test_create_image_dirs_no_search_keys(self):
-        """
-        Testing the create_image_dirs method of the Loader - class
-        """
-        search_keys = []
-        self.assertTrue(set(search_keys).issubset(set(listdir())))
-
     def test_create_image_dirs_one_search_key_list(self):
         """
         Testing the create_image_dirs method of the Loader - class
         """
         # Arrange
         search_keys = ["Dogs"]
+        PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
         gil = Google_Image_Loader.Loader(search_keys)
         # Act
         gil.create_image_dirs()
         # Assert
-        self.assertTrue(set(search_keys).issubset(set(listdir())))
+        self.assertTrue(set(search_keys).issubset(set(os.listdir(PREFIX))))
         # Cleaning
-        for s in search_keys:
-            rmdir(s)
+        rmtree(PREFIX)
 
     def test_create_image_dirs_two_search_keys_tuple(self):
         # Arrange
+        PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
         search_keys = ("Cats", "Unicorns")
         gil = Google_Image_Loader.Loader(search_keys)
         # Act
         gil.create_image_dirs()
         # Assert
-        self.assertTrue(set(search_keys).issubset(set(listdir())))
+        self.assertTrue(set(search_keys).issubset(set(os.listdir(PREFIX))))
         # Cleaning
-        for s in search_keys:
-            rmdir(s)
+        rmtree(PREFIX)
 
     def test_reformat_search_keys_two_keys_trailing_leading_whitespace(self):
         # Arrange
-        search_keys = [" fluffy Dogs","white Cats "]
+        search_keys = tuple([" fluffy Dogs","white Cats "])
         # Act
         gil = Google_Image_Loader.Loader(search_keys)
         gil.reformat_search_keys()
@@ -93,7 +87,7 @@ class LoaderTest(unittest.TestCase):
 
     def test_reformat_search_keys_one_key_whitespaces(self):
         # Arrange
-        search_key = [" fluffy Dogs "]
+        search_key = tuple([" fluffy Dogs "])
         # Act
         gil = Google_Image_Loader.Loader(search_key)
         formatted_search_keys = gil.reformat_search_keys()
