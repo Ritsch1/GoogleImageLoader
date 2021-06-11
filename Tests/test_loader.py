@@ -3,6 +3,9 @@ import os
 from shutil import rmtree
 from GoogleImageLoader import Google_Image_Loader
 
+# Directory path where directories of the search-keys and within them the images will be saved
+PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
+
 class LoaderTest(unittest.TestCase):
 
     def test_init_list_two_keys(self):
@@ -71,8 +74,8 @@ class LoaderTest(unittest.TestCase):
         Testing the create_image_dirs method of the Loader - class
         """
         # Arrange
+        global PREFIX
         search_keys = ["Dogs"]
-        PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
         gil = Google_Image_Loader.Loader(search_keys)
         # Act
         gil.create_image_dirs()
@@ -86,7 +89,7 @@ class LoaderTest(unittest.TestCase):
         Testing the create_image_dirs method of the Loader - class
         """
         # Arrange
-        PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
+        global PREFIX
         search_keys = ("Cats", "Unicorns")
         gil = Google_Image_Loader.Loader(search_keys)
         # Act
@@ -143,6 +146,27 @@ class LoaderTest(unittest.TestCase):
                 num_image_urls += 1
         # Assert
         self.assertEqual(len(search_keys) * gil.num_images, num_image_urls,)
+
+    def test_image_download(self):
+        """
+        Testing the download_images method of the Loader - class.
+        """
+        # Arrange
+        global PREFIX
+        search_keys = ["fluffy Gods", "fluffy Hawks"]
+        # Act
+        gil = Google_Image_Loader.Loader(search_keys)
+        gil.reformat_search_keys()
+        gil.create_image_dirs()
+        gil.scroll_through_google_images()
+        url_queue = gil.extract_picture_urls()
+        gil.download_images(url_queue=url_queue)
+
+        #Assert that pictures have been saved
+        self.assertTrue(len(os.listdir(os.path.join(PREFIX,gil.search_keys[0]))) > 0 and
+                        len(os.listdir(os.path.join(PREFIX,gil.search_keys[1]))) > 0)
+        # Cleaning
+        #rmtree(PREFIX)
 
 if __name__ == '__main__':
     unittest.main()
