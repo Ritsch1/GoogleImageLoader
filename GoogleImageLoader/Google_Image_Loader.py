@@ -1,5 +1,8 @@
-import os
+import os, time, threading
+from queue import Queue
 import datetime
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
 
 class Loader:
     """
@@ -28,6 +31,12 @@ class Loader:
             search_keys = list(set(search_keys))
             self.search_keys = search_keys
             self.num_images = num_images
+            # Constants - do not change
+            self.GOOGLE_PREFIX = "https://www.google.com/search?q="
+            self.GOOGLE_SUFFIX = "&source=lnms&tbm=isch&sa=X&ei=0eZEVbj3IJG5uATalICQAQ&ved=0CAcQ_AUoAQ&biw=939&bih=591"
+            # Variable to save the current stage of the google image results for different search_keys
+            self.page_sources = []
+            self.url = ""
 
     def create_image_dirs(self):
         """
@@ -45,3 +54,36 @@ class Loader:
         """
         self.search_keys = [s.strip().replace(" ","+") for s in self.search_keys]
 
+    def scroll_through_google_images(self):
+        """
+        This function executes scrolling through the google image search results. This
+        is neccessary as google only loads new images by scrolling down. Additionally,
+        the "see more" button needs to be clicked.
+        """
+        for search_key in self.search_keys:
+            driver = webdriver.Chrome(ChromeDriverManager().install())
+            # Construct the target url to access
+            self.url = self.GOOGLE_PREFIX + search_key + self.GOOGLE_SUFFIX
+            # Invoke get request
+            driver.get(self.url)
+
+            # Accessing the page and scroll down / click buttons
+            try:
+                # Scroll down
+                driver.execute_script("window.scrollTo(0,30000)")
+                time.sleep(2)
+                driver.execute_script("window.scrollTo(0,60000)")
+                time.sleep(2)
+
+            except:
+                print("url not valid")
+                driver.quit()
+
+            # Get the pages' current source code
+            self.page_sources.append(driver.page_source)
+            driver.close()
+
+    def extract_picture_url(self):
+        """
+        For all
+        """
