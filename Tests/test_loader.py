@@ -82,5 +82,23 @@ class LoaderTest(unittest.TestCase):
         for s in search_keys:
             rmdir(s)
 
+    def test_reformat_search_keys_two_keys_trailing_leading_whitespace(self):
+        # Arrange
+        search_keys = [" fluffy Dogs","white Cats "]
+        # Act
+        gil = Google_Image_Loader.Loader(search_keys)
+        gil.reformat_search_keys()
+        # Assert
+        self.assertEqual(gil.search_keys, ["fluffy+Dogs","white+Cats"])
+
+    def test_reformat_search_keys_one_key_whitespaces(self):
+        # Arrange
+        search_key = [" fluffy Dogs "]
+        # Act
+        gil = Google_Image_Loader.Loader(search_key)
+        formatted_search_keys = gil.reformat_search_keys()
+        # Assert
+        self.assertEqual(gil.search_keys, ["fluffy+Dogs"])
+
 if __name__ == '__main__':
     unittest.main()
