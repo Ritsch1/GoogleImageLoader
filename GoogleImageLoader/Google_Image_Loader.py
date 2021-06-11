@@ -148,5 +148,5 @@ class Loader:
             response = urllib.request.urlopen(url)
             url_queue.task_done()
             # add hash of last 5 url characters for unique filename property
-            with open(os.path.join(self.DIRECTORY_PREFIX, key, str(hash(url[-5:])[-10:])+".jpg"), 'wb') as f:
+            with open(os.path.join(self.DIRECTORY_PREFIX, key, str(hash(url[-5:]))+".jpg"), 'wb') as f:
                 f.write(response.file.read())
