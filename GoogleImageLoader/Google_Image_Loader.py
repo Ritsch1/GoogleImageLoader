@@ -1,4 +1,4 @@
-from os import mkdir
+import os
 import datetime
 
 class Loader:
@@ -29,13 +29,15 @@ class Loader:
         """
         Creates the image directories for the search-keys.
         """
+        PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
+        os.mkdir(path=PREFIX)
         for search_key in self.search_keys:
-            mkdir(path=search_key)
+            os.mkdir(path=os.path.join(PREFIX, search_key))
 
     def reformat_search_keys(self):
         """
         Reformat the search-keys to match format in the http get-query.
         For example: "dogs big fluffy" -> "dogs+big+fluffy"
         """
-        #Remove trailing/leading whitespaces and swap whitespace with +
         self.search_keys = [s.strip().replace(" ","+") for s in self.search_keys]
+
