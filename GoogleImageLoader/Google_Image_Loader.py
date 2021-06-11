@@ -6,16 +6,19 @@ class Loader:
     The central class to perform the loading of the google - images.
     """
 
-    def __init__(self, search_keys:[str]):
+    def __init__(self, search_keys:[str], num_images:int=100):
         """Initialize instance of the Google_Image_Loader class
 
         Args:
             search_keys : List of search keys for which images shall be downloaded.
                           If the list is empty, a ValueError is raised.
+            num_images: The maximum number of images to download for every search-key.
+                        By default set to 100.
         """
         if type(search_keys) != list and type(search_keys) != tuple:
             raise ValueError(f"provided search_keys - value {search_keys} is not an iterable.")
-
+        elif type(num_images) != int or num_images <= 0:
+            raise ValueError(f"provided image-number value {num_images} must be positive.")
         else:
             # Removing empty strings
             search_keys = [s for s in search_keys if len(s) > 0]
@@ -24,6 +27,7 @@ class Loader:
             #Remove duplicate search_keys
             search_keys = list(set(search_keys))
             self.search_keys = search_keys
+            self.num_images = num_images
 
     def create_image_dirs(self):
         """
