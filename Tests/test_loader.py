@@ -21,6 +21,23 @@ class LoaderTest(unittest.TestCase):
         gil = Google_Image_Loader.Loader(search_keys)
         self.assertIsInstance(gil, Google_Image_Loader.Loader)
 
+    def test_init_tuple_one_key_zero_images(self):
+        """
+        Testing the __init__ method of the Google_Image_Loader - class
+        """
+        search_keys = ("Hello World", "Nice to meet you")
+        num_images = 0
+        self.assertRaises(ValueError, Google_Image_Loader.Loader, search_keys, num_images)
+
+    def test_init_tuple_one_key_negative_images(self):
+        """
+        Testing the __init__ method of the Google_Image_Loader - class
+        """
+        search_keys = ("Hello World", "Nice to meet you")
+        num_images = -1
+        self.assertRaises(ValueError, Google_Image_Loader.Loader, search_keys, num_images)
+
+
     def test_init_tuple_no_key(self):
         """
         Testing the __init__ method of the Google_Image_Loader - class
@@ -75,15 +92,6 @@ class LoaderTest(unittest.TestCase):
         self.assertTrue(set(search_keys).issubset(set(os.listdir(PREFIX))))
         # Cleaning
         rmtree(PREFIX)
-
-    def test_reformat_search_keys_two_keys_trailing_leading_whitespace(self):
-        # Arrange
-        search_keys = tuple([" fluffy Dogs","white Cats "])
-        # Act
-        gil = Google_Image_Loader.Loader(search_keys)
-        gil.reformat_search_keys()
-        # Assert
-        self.assertEqual(gil.search_keys, ["fluffy+Dogs","white+Cats"])
 
     def test_reformat_search_keys_one_key_whitespaces(self):
         # Arrange
