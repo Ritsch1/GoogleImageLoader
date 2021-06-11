@@ -1,13 +1,19 @@
-class GoogleImageLoader():
+from os import mkdir
+import datetime
 
-    def __init__(self, search_keys: list):
+class Loader:
+    """
+    The central class to perform the loading of the google - images.
+    """
+
+    def __init__(self, search_keys:[str]):
         """Initialize instance of the Google_Image_Loader class
 
         Args:
             search_keys : List of search keys for which images shall be downloaded.
                           If the list is empty, a ValueError is raised.
         """
-        if type(search_keys) != list or type(search_keys) != tuple:
+        if type(search_keys) != list and type(search_keys) != tuple:
             raise ValueError(f"provided search_keys - value {search_keys} is not an iterable.")
 
         else:
@@ -18,3 +24,7 @@ class GoogleImageLoader():
             #Remove duplicate search_keys
             search_keys = list(set(search_keys))
             self.search_keys = search_keys
+
+    def create_image_dirs(self):
+        for search_key in self.search_keys:
+            mkdir(path=search_key)
