@@ -7,6 +7,7 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import urllib.request
+import timeit
 
 class Loader:
     """
@@ -45,13 +46,24 @@ class Loader:
             # Directory path where directories of the search-keys and within them the images will be saved
             self.DIRECTORY_PREFIX = os.path.join(os.path.expanduser("~"), "GoogleImageLoads")
 
+    def create_central_dir(self):
+        """
+        Create the central folder that contains all subfolders to search - queries and contains the
+        corresponding images.
+        """
+        if not os.path.isdir(self.DIRECTORY_PREFIX):
+            os.mkdir(self.DIRECTORY_PREFIX)
+
     def create_image_dirs(self):
         """
         Creates the image directories for the search-keys.
         """
-        os.mkdir(path=self.DIRECTORY_PREFIX)
         for search_key in self.search_keys:
-            os.mkdir(path=os.path.join(self.DIRECTORY_PREFIX, search_key))
+            # Check if there is already a directory with this search - key
+            new_dir = os.path.join(self.DIRECTORY_PREFIX, search_key)
+            # Skip the creation if it already exists
+            if not os.path.isdir(new_dir):
+                os.mkdir(path=os.path.join(self.DIRECTORY_PREFIX, search_key))
 
     def reformat_search_keys(self):
         """
@@ -60,33 +72,52 @@ class Loader:
         """
         self.search_keys = [s.strip().replace(" ","+") for s in self.search_keys]
 
-    def scroll_through_google_images(self):
+    def download_google_images(self):
         """
         This function executes scrolling through the google image search results. This
         is necessary as google only loads new images by scrolling down. Additionally,
         the "see more" button needs to be clicked.
         """
+        page_reload_wait = 2
+        options = webdriver.ChromeOptions()
+        #Surpress terminal output from selenium
+        options.add_argument("--log-level=3")
         for search_key in self.search_keys:
-            driver = webdriver.Chrome(ChromeDriverManager().install())
+            driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
             # Construct the target url to access
             url = self.GOOGLE_PREFIX + search_key + self.GOOGLE_SUFFIX
             # Invoke get request
             driver.get(url)
 
-            # Accessing the page and scroll down / click buttons
-            try:
+            # Accessing the page and scroll down / see - more click buttons
+            old_height = driver.execute_script('return document.body.scrollHeight')
+            while True:
                 # Scroll down
-                driver.execute_script("window.scrollTo(0,30000)")
-                time.sleep(2)
-                driver.execute_script("window.scrollTo(0,60000)")
-                time.sleep(2)
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(page_reload_wait)
+                new_height = driver.execute_script('return document.body.scrollHeight')
 
-            except:
-                print("url not valid")
-                driver.quit()
+                #if the end of the page is reached
+                if new_height == old_height:
+                    # try to find the "see more" button if there is one
+                    try:
+                        driver.find_element_by_class_name('mye4qd').click()
+                        time.sleep(page_reload_wait)
+                    except:
+                        break
+                else:
+                    old_height = new_height
 
+            # Download the images that are available on the current state of the page
+            download_dir = os.path.join(self.DIRECTORY_PREFIX, search_key)
+            for i in range(1, self.num_images+1):
+                try:
+                    driver.find_element_by_xpath(f'//*[@id="islrg"]/div[1]/div[{i}]/a[1]/div[1]/img')\
+                        .screenshot(os.path.join(download_dir, search_key+str(i)+".png"))
+                except:
+                    pass
             # Get the pages' current source code
-            self.page_sources[search_key] = driver.page_source
+            #self.page_sources[search_key] = driver.page_source
             driver.close()
 
     def extract_picture_urls(self) -> Queue:
@@ -125,11 +156,15 @@ class Loader:
         """
         threads = []
         # Create as many threads as there are cpu-cores
-        for i in range(mp.cpu_count()):
-            # Initialize processes that will work in parallel on the urls in the url_queue
-            threads.append(threading.Thread(target=self.worker, args=(url_queue,), daemon=True))
-            # Start process
-            threads[i].start()
+        try:
+            for i in range(mp.cpu_count()):
+                # Initialize processes that will work in parallel on the urls in the url_queue
+                threads.append(threading.Thread(target=self.worker, args=(url_queue,), daemon=True))
+                # Start process
+                threads[i].start()
+
+        except:
+            print("Downloading the images failed. Please check network connection.")
 
         # This thread/function will only continue when all items in the queue were processed by the threads
         url_queue.join()
@@ -148,5 +183,8 @@ class Loader:
             response = urllib.request.urlopen(url)
             url_queue.task_done()
             # add hash of last 5 url characters for unique filename property
-            with open(os.path.join(self.DIRECTORY_PREFIX, key, str(hash(url[-5:]))+".jpg"), 'wb') as f:
-                f.write(response.file.read())
+            try:
+                with open(os.path.join(self.DIRECTORY_PREFIX, key, str(hash(url[-5:]))+".jpeg"), 'w') as f:
+                    f.write(response.file.read())
+            except:
+                print(f"Saving images for search-key {key} failed.")
