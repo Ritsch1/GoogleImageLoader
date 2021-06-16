@@ -5,9 +5,10 @@ import multiprocessing as mp
 from queue import Queue
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
 import urllib.request
-import timeit
+import datetime
+import requests
+from bs4 import BeautifulSoup
 
 class Loader:
     """
@@ -60,10 +61,10 @@ class Loader:
         """
         for search_key in self.search_keys:
             # Check if there is already a directory with this search - key
-            new_dir = os.path.join(self.DIRECTORY_PREFIX, search_key)
+            new_dir = os.path.join(self.DIRECTORY_PREFIX, search_key+ "_" + str(datetime.date.today()))
             # Skip the creation if it already exists
             if not os.path.isdir(new_dir):
-                os.mkdir(path=os.path.join(self.DIRECTORY_PREFIX, search_key))
+                os.mkdir(new_dir)
 
     def reformat_search_keys(self):
         """
@@ -78,10 +79,12 @@ class Loader:
         is necessary as google only loads new images by scrolling down. Additionally,
         the "see more" button needs to be clicked.
         """
-        page_reload_wait = 2
+        page_reload_wait = 1
         options = webdriver.ChromeOptions()
         #Surpress terminal output from selenium
         options.add_argument("--log-level=3")
+        # List for storing all image_urls
+        image_urls = []
         for search_key in self.search_keys:
             driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
             # Construct the target url to access
@@ -108,16 +111,39 @@ class Loader:
                 else:
                     old_height = new_height
 
-            # Download the images that are available on the current state of the page
-            download_dir = os.path.join(self.DIRECTORY_PREFIX, search_key)
-            for i in range(1, self.num_images+1):
-                try:
-                    driver.find_element_by_xpath(f'//*[@id="islrg"]/div[1]/div[{i}]/a[1]/div[1]/img')\
-                        .screenshot(os.path.join(download_dir, search_key+str(i)+".png"))
-                except:
-                    pass
-            # Get the pages' current source code
-            #self.page_sources[search_key] = driver.page_source
+            # for google image result website logic
+            is_first_image = True
+            # Get all image results (class with multiple words separated by whitespaces are actually several
+            # classes, use css_selector instead and prefix every class with a dot, like below
+            images = driver.find_elements_by_css_selector('.isv-r.PNCib.MSM1fd.BUooTd')
+            # Click and infer the original image - url (with the original size) from each image result
+            for image in images[:self.num_images]:
+                image.click()
+                time.sleep(1)
+                if is_first_image:
+                    image_urls.append(driver.find_elements_by_class_name('n3VNCb')[0].get_attribute("src"))
+                    is_first_image = False
+                else:
+                    image_urls.append(driver.find_elements_by_class_name('n3VNCb')[1].get_attribute("src"))
+
+            # Set download directory
+            download_dir = os.path.join(self.DIRECTORY_PREFIX, search_key+ "_" + str(datetime.date.today()))
+            # Load all valid image - data and save it in the download directory
+            for index, url in enumerate(image_urls):
+                # If url is actually an image-uri and not a image e.g. jpeg, process it differently
+                # This type of data will be saved as png
+                if url[:4] == "data":
+                    img_data = urllib.request.urlopen(url)
+                    with open(os.path.join(download_dir,search_key + "_" + str(index) + ".jpg"), 'wb') as f:
+                        f.write(img_data.file.read())
+
+                # Normal image data e.g. jpeg or png
+                # This type of data will be saved as jpeg by default
+                else:
+                    img_data = requests.get(url).content
+                    with open(os.path.join(download_dir,search_key + "_" + str(index) + ".jpg"), 'wb') as handler:
+                        handler.write(img_data)
+
             driver.close()
 
     def extract_picture_urls(self) -> Queue:
