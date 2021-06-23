@@ -129,6 +129,7 @@ class Loader:
             # Set download directory
             download_dir = os.path.join(self.DIRECTORY_PREFIX, search_key+ "_" + str(datetime.date.today()))
             # Load all valid image - data and save it in the download directory
+            #TODO Implement multi-threading requesting and loading to speed up the application
             for index, url in enumerate(image_urls):
                 # If url is actually an image-uri and not a image e.g. jpeg, process it differently
                 # This type of data will be saved as png
