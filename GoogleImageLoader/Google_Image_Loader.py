@@ -1,14 +1,13 @@
 import os
 import time
-import threading
 import multiprocessing as mp
-from queue import Queue
 from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 import urllib.request
 import datetime
 import requests
-from bs4 import BeautifulSoup
+import threading
 
 class Loader:
     """
@@ -66,6 +65,28 @@ class Loader:
             if not os.path.isdir(new_dir):
                 os.mkdir(new_dir)
 
+    def download_images(self, image_urls: list):
+        """
+        Download all images given their urls and load them into the corresponding directory.
+
+        params:
+            image_urls: A list of queues containing the image_urls for the different search - keys.
+            The first item in the queue is always the search - key for later inference of
+            the download directory.
+        """
+        # Initialize as many threads as there are search_keys
+        threads = []
+        try:
+            for i in range(len(self.search_keys)):
+                threads.append(threading.Thread(target=self.worker, args=(image_urls[i],), daemon=True))
+                threads[i].start()
+        except:
+            raise ConnectionError("Failed to download the images. Please check your network connection.")
+
+        # Terminate threads
+        for t in threads:
+            t.join()
+
     def reformat_search_keys(self):
         """
         Reformat the search-keys to match format in the http get-query.
@@ -73,20 +94,27 @@ class Loader:
         """
         self.search_keys = [s.strip().replace(" ","+") for s in self.search_keys]
 
-    def download_google_images(self):
+    def fetch_image_urls(self) -> list:
         """
         This function executes scrolling through the google image search results. This
         is necessary as google only loads new images by scrolling down. Additionally,
         the "see more" button needs to be clicked.
+
+        returns:
+            image_urls: A list of lists where every sublist contains the image_urls for the
+            different search - keys.
+            The first item in a sublist is always the search - key for later inference of
+            the download directory.
         """
-        page_reload_wait = 1
+        page_reload_wait = 0.5
         options = webdriver.ChromeOptions()
-        #Surpress terminal output from selenium
+        # Suppress terminal output from selenium
         options.add_argument("--log-level=3")
-        # List for storing all image_urls
-        image_urls = []
-        for search_key in self.search_keys:
-            driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
+        options.add_argument("headless")
+        # List of queues storing image_urls
+        image_urls = [[]] * len(self.search_keys)
+        for i, search_key in enumerate(self.search_keys):
+            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
             # Construct the target url to access
             url = self.GOOGLE_PREFIX + search_key + self.GOOGLE_SUFFIX
             # Invoke get request
@@ -94,13 +122,16 @@ class Loader:
 
             # Accessing the page and scroll down / see - more click buttons
             old_height = driver.execute_script('return document.body.scrollHeight')
+            # Click accept-cookies button if there is one
+            cookie_btn = driver.find_element_by_class_name("qXTnff")
+            cookie_btn.click()
             while True:
                 # Scroll down
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
                 time.sleep(page_reload_wait)
                 new_height = driver.execute_script('return document.body.scrollHeight')
 
-                #if the end of the page is reached
+                # If the end of the page is reached
                 if new_height == old_height:
                     # try to find the "see more" button if there is one
                     try:
@@ -116,102 +147,52 @@ class Loader:
             # Get all image results (class with multiple words separated by whitespaces are actually several
             # classes, use css_selector instead and prefix every class with a dot, like below
             images = driver.find_elements_by_css_selector('.isv-r.PNCib.MSM1fd.BUooTd')
+            # The first element in the queue is the search - key, for later building the download_dir
+            image_urls[i].append(search_key)
+            # Go back to the top of the page, such that the little icon bar is not
+            # hiding the images and the images are thus clickable
+            driver.find_element_by_tag_name('body').send_keys(Keys.CONTROL + Keys.HOME)
+
             # Click and infer the original image - url (with the original size) from each image result
             for image in images[:self.num_images]:
                 image.click()
-                time.sleep(1)
                 if is_first_image:
-                    image_urls.append(driver.find_elements_by_class_name('n3VNCb')[0].get_attribute("src"))
+                    image_urls[i].append(driver.find_elements_by_class_name('n3VNCb')[0].get_attribute("src"))
                     is_first_image = False
                 else:
-                    image_urls.append(driver.find_elements_by_class_name('n3VNCb')[1].get_attribute("src"))
-
-            # Set download directory
-            download_dir = os.path.join(self.DIRECTORY_PREFIX, search_key+ "_" + str(datetime.date.today()))
-            # Load all valid image - data and save it in the download directory
-            #TODO Implement multi-threading requesting and loading to speed up the application
-            for index, url in enumerate(image_urls):
-                # If url is actually an image-uri and not a image e.g. jpeg, process it differently
-                # This type of data will be saved as png
-                if url[:4] == "data":
-                    img_data = urllib.request.urlopen(url)
-                    with open(os.path.join(download_dir,search_key + "_" + str(index) + ".jpg"), 'wb') as f:
-                        f.write(img_data.file.read())
-
-                # Normal image data e.g. jpeg or png
-                # This type of data will be saved as jpeg by default
-                else:
-                    img_data = requests.get(url).content
-                    with open(os.path.join(download_dir,search_key + "_" + str(index) + ".jpg"), 'wb') as handler:
-                        handler.write(img_data)
+                    image_urls[i].append(driver.find_elements_by_class_name('n3VNCb')[1].get_attribute("src"))
 
             driver.close()
 
-    def extract_picture_urls(self) -> Queue:
-        """
-        Extract the url of every image for each page source-codes.
+        return image_urls
 
-        returns:
-            A queue that contains all image urls and the corresponding search_key in the
-            form (search_key, image_url)
-        """
-        # Queue for storing all picture urls
-        q = Queue()
-        for search_key in self.search_keys:
-            # queue to insert the image urls for a specific search - key into
-
-            # Get the page source-code for a specific search - key and parse it
-            html_doc = BeautifulSoup(self.page_sources[search_key], "html.parser")
-            # Only extract maximally num_images many picture - urls
-            # rg_i Q4LuWd is the class identifier of the img tags of interest
-            try:
-                imgs = html_doc.find_all(class_="rg_i Q4LuWd", limit=self.num_images)
-                for tag in imgs:
-                    q.put( (search_key, tag["src"]) )
-
-            except:
-                print(f"Error while parsing the page source-code of search-key {search_key}.")
-
-        return q
-
-    def download_images(self, url_queue:Queue):
-        """
-        Download all images given their urls and load them into the corresponding directory.
-
-        params:
-            url_queue: Queue that contains all image urls in the form (search_key, image_url).
-        """
-        threads = []
-        # Create as many threads as there are cpu-cores
-        try:
-            for i in range(mp.cpu_count()):
-                # Initialize processes that will work in parallel on the urls in the url_queue
-                threads.append(threading.Thread(target=self.worker, args=(url_queue,), daemon=True))
-                # Start process
-                threads[i].start()
-
-        except:
-            print("Downloading the images failed. Please check network connection.")
-
-        # This thread/function will only continue when all items in the queue were processed by the threads
-        url_queue.join()
-
-    def worker(self, url_queue:Queue):
+    def worker(self, url_list: list):
         """
         Initiates a worker thread to download images from the web and saving them to disk.
         This way network - delays and I/O - blocks can be mitigated and the code can be sped up.
 
         params:
-            url_queue: Queue that contains all image urls in the form (search_key, image_url).
+            url_list: List that contains all image urls for one search - key, while the first
+            item in the list is the search - key for inference of the download directory.
         """
-        global DIRECTORY_PREFIX
-        while True:
-            key, url = url_queue.get()
-            response = urllib.request.urlopen(url)
-            url_queue.task_done()
-            # add hash of last 5 url characters for unique filename property
-            try:
-                with open(os.path.join(self.DIRECTORY_PREFIX, key, str(hash(url[-5:]))+".jpeg"), 'w') as f:
-                    f.write(response.file.read())
-            except:
-                print(f"Saving images for search-key {key} failed.")
+        # Set download directory
+        search_key = url_list[0]
+        download_dir = os.path.join(self.DIRECTORY_PREFIX, search_key + "_" + str(datetime.date.today()))
+        counter = 1
+        while counter < len(url_list):
+            url = url_list[counter]
+            # If url is actually an image-uri and not a image e.g. jpeg, process it differently
+            # This type of data will be saved as png
+            if url[:4] == "data":
+                img_data = urllib.request.urlopen(url)
+                with open(os.path.join(download_dir, search_key + "_" + str(counter) + ".jpg"), 'wb') as f:
+                    f.write(img_data.file.read())
+
+            # Normal image data e.g. jpeg or png
+            # This type of data will be saved as jpeg by default
+            else:
+                img_data = requests.get(url).content
+                with open(os.path.join(download_dir, search_key + "_" + str(counter) + ".jpg"), 'wb') as handler:
+                    handler.write(img_data)
+
+            counter += 1
