@@ -17,7 +17,8 @@ if not os.path.isdir(PREFIX):
     gil.create_central_dir()
 # create search - key specific image folders
 gil.create_image_dirs()
-gil.download_google_images()
+image_urls = gil.fetch_image_urls()
+gil.download_images(image_urls)
 
 print(f"Successfully downloaded images for the search - keys:\n{','.join(x for x in args.keys)}\nin "
       f"{timeit.default_timer()-start:.2f} s")
