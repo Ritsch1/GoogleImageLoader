@@ -18,7 +18,7 @@ To use the GoogleImageLoader you have to run:
 The argument *-n* determines how many images will maximally be downloaded for each search - key.
 It will download the maximal available images from the Google image search-page.
 The argument *-k* determines the search-keys that are used for an image-search each.
-The images to each search key will be saved into a folder in *~/GoogleImageLoads/key1_YYYY-MM-DD*.
+The images to each search key will be saved into a folder in *~/GoogleImageLoads/key_YYYY-MM-DD* for every key provided with -k option.
 
 ## Example
 
